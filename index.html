@@ -38,9 +38,12 @@ header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-be
 h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .sub{color:var(--muted);font-size:12.5px;margin:4px 0 0}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
-.btn{-webkit-appearance:none;appearance:none;border:1px solid var(--line2);background:linear-gradient(#fff,#f4f6f9);color:var(--ink);font-weight:700;font-size:13.5px;min-height:42px;padding:0 18px;border-radius:999px;cursor:pointer;box-shadow:var(--raised)}
-.btn:active{transform:translateY(1px);box-shadow:0 1px 1px rgba(16,18,23,.12)}
-.btn.primary{background:linear-gradient(#2a2e37,#111318);color:#fff;border-color:#0b0c10}
+/* 上部ボタン：単一の枠線＋外側の影のみ（二重線に見えないよう内側ハイライトなし） */
+.btn{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line2);background:var(--card);color:var(--ink);font-weight:700;font-size:13.5px;min-height:44px;padding:0 18px;border-radius:12px;cursor:pointer;box-shadow:0 2px 6px rgba(16,18,23,.08)}
+.btn:active{transform:translateY(1px);box-shadow:none;background:var(--panel)}
+.btn.primary{background:var(--ink);color:#fff;border:0;box-shadow:0 3px 10px rgba(16,18,23,.22)}
+.btn.primary:active{background:#2a2e37}
+.btn .ico{width:16px;height:16px;flex:none}
 .btn:disabled{opacity:.6}
 
 .notice{font-size:12.5px;padding:10px 14px;border-radius:12px;background:var(--panel);color:var(--ink2);display:flex;gap:8px;align-items:flex-start}
@@ -56,11 +59,12 @@ h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .tot .lbl{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--ink2)}
 .tot .lbl::before{content:"";width:9px;height:9px;border-radius:50%}
 .tot.fam .lbl::before{background:var(--fam)} .tot.self .lbl::before{background:var(--self)}
-.tot .val{font-size:34px;font-weight:800;line-height:1.25;margin-top:4px;letter-spacing:-.01em}
+.tot .val{font-size:34px;font-weight:800;line-height:1.25;margin-top:4px;letter-spacing:-.01em;text-align:right}
 .tot.fam .val{color:var(--fam-ink)} .tot.self .val{color:var(--self-ink)}
 .breakdown{margin:12px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--ink2)}
 .breakdown li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(16,18,23,.09)}
-.breakdown li span:last-child{font-weight:700;color:var(--ink)}
+.breakdown li span:last-child{font-weight:700;color:var(--ink);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.breakdown .cnt{margin-left:6px;font-size:11px;color:var(--muted);font-weight:600}
 .check{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 20px;align-items:center;font-size:12.5px;color:var(--muted);padding:12px 16px;background:var(--panel);border-radius:14px}
 .check b{color:var(--ink);font-weight:700;margin-left:4px}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:11.5px;font-weight:700}
@@ -116,6 +120,11 @@ h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .tag{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:999px;border:1px solid transparent}
 .tag.self{background:var(--self-soft);color:var(--self-ink);border-color:var(--self-edge)}
 .tag.fam{background:var(--fam-soft);color:var(--fam-ink);border-color:var(--fam-edge)}
+.tag.lock{background:var(--panel2);color:var(--ink2);border-color:var(--line2)}
+/* 家族へ全額：行は残したままグレーアウト（仕分けボタンとメモは操作可能） */
+.row.is-moved{background:#eef0f3!important}
+.row.is-moved .stripe{background:#b9bec6}
+.row.is-moved .main,.row.is-moved .amt,.row.is-moved dl.inst{opacity:.45;filter:grayscale(1)}
 .ctrl{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
 /* 仕分けボタン：立体的なボタン */
 .seg{display:inline-flex;flex-wrap:wrap;gap:8px}
@@ -171,7 +180,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       <p class="sub" id="stmtInfo">PayPayカード利用明細CSV ・ 当月支払金額で集計</p>
     </div>
     <div class="actions">
-      <button class="btn primary" id="pickBtn" type="button">CSVを読み込む</button>
+      <button class="btn primary" id="pickBtn" type="button"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V2.5M4.5 6 8 2.5 11.5 6M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>CSVを読み込む</button>
       <input type="file" id="fileInput" accept=".csv,text/csv" hidden>
       <button class="btn" id="pdfBtn" type="button">PDFで出力</button>
       <button class="btn" id="resetBtn" type="button">リセット</button>
@@ -186,8 +195,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       <div class="val num" id="famTotal">¥0</div>
       <ul class="breakdown">
         <li><span>家族カード利用</span><span class="num" id="bFamCard">¥0</span></li>
-        <li><span>本人利用 → 全額振替</span><span class="num" id="bFull">¥0</span></li>
-        <li><span>本人利用 → 一部振替</span><span class="num" id="bPart">¥0</span></li>
+        <li><span>本人利用 → 全額振替<span class="cnt" id="nFull"></span></span><span class="num" id="bFull">¥0</span></li>
+        <li><span>本人利用 → 一部振替<span class="cnt" id="nPart"></span></span><span class="num" id="bPart">¥0</span></li>
       </ul>
     </div>
     <div class="tot self">
@@ -276,6 +285,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 "2026/1/14","（サンプル）ドラッグストア","家族*","Apple Pay タッチ決済","1回","1380","0","1380","1380","0","0","2099/1/1"
 "2026/1/15","（サンプル）レストラン","本人*","PayPayクレジット","1回","8400","0","8400","8400","0","0","2099/1/1"
 "2026/1/16","（サンプル）コンビニ","本人*","Apple Pay","1回","620","0","620","620","0","0","2099/1/1"
+"2026/1/17","（サンプル）通販サイト（分割変更）","本人","PayPayカード ゴールド","分割変更","12000","0","12000","4000","8000","0","2099/1/1"
 "2026/1/18","（サンプル）電気料金","家族*","PayPayカード ゴールド","1回","9800","0","9800","9800","0","0","2099/1/1"`;
 
   const $ = id => document.getElementById(id);
@@ -365,6 +375,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
         rawId: base+"#"+seen[base],
         date: r[iDate]||"", store: r[iStore]||"", userRaw: (r[iUser]||"").trim(),
         fam: (r[iUser]||"").trim().startsWith("家族"),
+        // 分割変更の明細は誤操作防止のため仕分け不可（常に本人）
+        locked: /分割変更/.test((r[iStore]||"") + (iKind>=0 ? r[iKind]||"" : "")),
         pay: iPay>=0?r[iPay]:"", kind: iKind>=0?r[iKind]:"", use: iUse>=0?toNum(r[iUse]):null,
         amt: toNum(r[iAmt]), due: iDue>=0?r[iDue]:"",
         fee: iFee>=0?toNum(r[iFee]):0, total: iTotal>=0?toNum(r[iTotal]):null, carry: iCarry>=0?toNum(r[iCarry]):0,
@@ -410,7 +422,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     if(m==="part" && r.amt) return clamp(toNum(state[r.id].part), r.amt) / r.amt;
     return 0;
   }
-  function modeOf(r){ return r.fam ? "fam" : (state[r.id]?.mode || "self"); }
+  function modeOf(r){ return r.fam ? "fam" : r.locked ? "self" : (state[r.id]?.mode || "self"); }
 
   function totals(){
     let grand=0, famCard=0, selfCard=0, full=0, part=0, nFull=0, nPart=0;
@@ -431,8 +443,10 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     $("famTotal").textContent = yen(t.fam);
     $("selfTotal").textContent = yen(t.self);
     $("bFamCard").textContent = yen(t.famCard);
-    $("bFull").textContent = yen(t.full) + (t.nFull?`（${t.nFull}件）`:"");
-    $("bPart").textContent = yen(t.part) + (t.nPart?`（${t.nPart}件）`:"");
+    $("bFull").textContent = yen(t.full);
+    $("bPart").textContent = yen(t.part);
+    $("nFull").textContent = t.nFull ? `${t.nFull}件` : "";
+    $("nPart").textContent = t.nPart ? `${t.nPart}件` : "";
     $("bSelfCard").textContent = yen(t.selfCard);
     $("bMoved").textContent = "−" + yen(t.full+t.part).replace("−","");
     $("grand").textContent = yen(t.grand);
@@ -475,9 +489,10 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 
   function rowHTML(r, i){
     const m = modeOf(r);
-    const cls = m==="fam"||m==="full" ? "is-fam" : m==="part" ? "is-part" : "";
+    const cls = m==="fam" ? "is-fam" : m==="full" ? "is-fam is-moved" : m==="part" ? "is-part" : "";
     const s = state[r.id] || {};
-    const tag = r.fam ? `<span class="tag fam">家族カード</span>` : `<span class="tag self">本人カード</span>`;
+    const tag = (r.fam ? `<span class="tag fam">家族カード</span>` : `<span class="tag self">本人カード</span>`)
+      + (r.locked ? `<span class="tag lock">分割変更・仕分け不可</span>` : "");
     const inst = r.kind && r.kind!=="1回" ? ` ・ ${esc(r.kind)}` : "";
     let instBox = "";
     if(r.inst){
@@ -496,7 +511,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     if(m==="part"){ const f = clamp(toNum(s.part), r.amt); split = `<div class="split">家族 <b>${yen(f)}</b> / 本人 ${yen(r.amt-f)}</div>`; }
     else if(m==="full") split = `<div class="split"><b>家族へ全額</b></div>`;
     let ctrl = "";
-    if(!r.fam){
+    if(!r.fam && !r.locked){
       ctrl = `<div class="ctrl">
         <span class="seg" role="group" aria-label="仕分け">
           <button type="button" data-i="${i}" data-v="self" aria-pressed="${m==="self"}">本人</button>
