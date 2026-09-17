@@ -46,10 +46,12 @@ h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .btn .ico{width:16px;height:16px;flex:none}
 .btn:disabled{opacity:.6}
 
-.notice{font-size:12.5px;white-space:pre-line;padding:10px 14px;border-radius:12px;background:var(--panel);color:var(--ink2);display:flex;gap:8px;align-items:flex-start}
+.notice{font-size:12.5px;padding:10px 14px;border-radius:12px;background:var(--panel);color:var(--ink2);display:flex;gap:8px;align-items:flex-start}
 .notice::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--self);margin-top:7px}
 .notice.sample{background:var(--fam-soft);color:var(--fam-ink);border:1px solid var(--fam-edge)}
 .notice.sample::before{background:var(--fam)}
+.notice-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.notice-body strong{font-weight:800}
 
 /* summary */
 .summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -203,8 +205,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     </div>
   </header>
 
-  <div id="notice" class="notice sample">表示中はサンプル明細です。
-「CSVを読み込む」からPayPayカードの利用明細CSVを選択しご利用ください。</div>
+  <div id="notice" class="notice sample"><div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSVを「CSVを読み込む」から選択してご利用ください。</span></div></div>
 
   <section class="summary" aria-label="集計">
     <div class="tot fam">
@@ -302,7 +303,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 <script>
 (function(){
 
-  const SAMPLE_MSG = "表示中はサンプル明細です。\n「CSVを読み込む」からPayPayカードの利用明細CSVを選択しご利用ください。";
+  const SAMPLE_HTML = `<div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSVを「CSVを読み込む」から選択してご利用ください。</span></div>`;
   const $ = id => document.getElementById(id);
   const yen = n => (n<0?"−":"") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
   const SAMPLE = `"利用日/キャンセル日","利用店名・商品名","利用者","決済方法","支払区分","利用金額","手数料","支払総額","当月支払金額","翌月以降繰越金額","調整額","当月お支払日"
@@ -435,7 +436,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     if(migrated) save();
     $("stmtInfo").textContent = isSample ? "サンプル明細 ・ 当月支払金額で集計" : `お支払日 ${due} ・ ${parsed.length}件 ・ 当月支払金額で集計`;
     const n = $("notice");
-    if(isSample){ n.className="notice sample"; n.textContent=SAMPLE_MSG; n.hidden=false; }
+    if(isSample){ n.className="notice sample"; n.innerHTML=SAMPLE_HTML; n.hidden=false; }
     else { n.hidden = true; }
     render();
   }
