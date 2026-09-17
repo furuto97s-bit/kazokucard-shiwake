@@ -83,6 +83,14 @@ h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .toggle[aria-expanded="true"] .toggle-lbl::after{content:"閉じる"}
 .toggle[aria-expanded="false"] .toggle-lbl::after{content:"表示する"}
 .instbody{display:flex;flex-direction:column;gap:12px}
+.instmini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mi{display:flex;align-items:center;gap:8px;background:var(--panel);border-radius:12px;padding:10px 14px;font-size:12.5px;color:var(--muted)}
+.mi .lbl{display:flex;align-items:center;gap:6px;font-weight:800}
+.mi .lbl::before{content:"";width:8px;height:8px;border-radius:50%}
+.mi.fam .lbl{color:var(--fam-ink)} .mi.fam .lbl::before{background:var(--fam)}
+.mi.self .lbl{color:var(--self-ink)} .mi.self .lbl::before{background:var(--self)}
+.mi .sep{margin-left:auto}
+.mi b{color:var(--ink);font-weight:800;font-size:14px}
 
 /* installments */
 .instsum{display:flex;flex-direction:column;gap:12px}
@@ -163,6 +171,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   header .btn{flex:1 1 0;padding:0 8px;white-space:nowrap;font-size:13px}
   header .btn.primary{flex:1.35 1 0}
   .summary,.instgrid{grid-template-columns:1fr}
+  .instmini{grid-template-columns:1fr}
   .ib dl{grid-template-columns:1fr}
   .tot .val{font-size:30px}
   #countInfo{margin-left:0}
@@ -194,7 +203,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     </div>
   </header>
 
-  <div id="notice" class="notice sample">表示中はサンプル明細です。「CSVを読み込む」からPayPayカードの利用明細CSVを選ぶと、ご自身の明細に切り替わります。</div>
+  <div id="notice" class="notice">「CSVを読み込む」からPayPayカードの利用明細CSVを選んでください。</div>
 
   <section class="summary" aria-label="集計">
     <div class="tot fam">
@@ -224,6 +233,10 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 
   <section class="instsum" aria-label="分割払いの状況">
     <h2 class="sec-h"><button type="button" class="toggle" id="instToggle" aria-expanded="true" aria-controls="instBody">分割払い<svg class="chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="toggle-lbl"></span></button></h2>
+    <div class="instmini" id="instMini" hidden>
+      <div class="mi fam"><span class="lbl">家族</span><span class="num" id="mFamN">0件</span><span class="sep">当月</span><b class="num" id="mFamNow">¥0</b></div>
+      <div class="mi self"><span class="lbl">本人</span><span class="num" id="mSelfN">0件</span><span class="sep">当月</span><b class="num" id="mSelfNow">¥0</b></div>
+    </div>
     <div class="instbody" id="instBody">
     <div class="instgrid">
       <div class="ib fam">
@@ -287,19 +300,10 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 
 <script>
 (function(){
-  const SAMPLE = `"利用日/キャンセル日","利用店名・商品名","利用者","決済方法","支払区分","利用金額","手数料","支払総額","当月支払金額","翌月以降繰越金額","調整額","当月お支払日"
-"2026/1/10","（サンプル）家電ショップ","本人","Apple Pay","均等 1／3","30000","900","30900","10300","20600","0","2099/1/1"
-"2026/1/12","（サンプル）スーパー","家族*","Apple Pay タッチ決済","1回","4820","0","4820","4820","0","0","2099/1/1"
-"2026/1/13","（サンプル）ガソリンスタンド","本人*","PayPayカード ゴールド","1回","5200","0","5200","5200","0","0","2099/1/1"
-"2026/1/14","（サンプル）ドラッグストア","家族*","Apple Pay タッチ決済","1回","1380","0","1380","1380","0","0","2099/1/1"
-"2026/1/15","（サンプル）レストラン","本人*","PayPayクレジット","1回","8400","0","8400","8400","0","0","2099/1/1"
-"2026/1/16","（サンプル）コンビニ","本人*","Apple Pay","1回","620","0","620","620","0","0","2099/1/1"
-"2026/1/17","（サンプル）通販サイト（分割変更）","本人","PayPayカード ゴールド","分割変更","12000","0","12000","4000","8000","0","2099/1/1"
-"2026/1/18","（サンプル）電気料金","家族*","PayPayカード ゴールド","1回","9800","0","9800","9800","0","0","2099/1/1"`;
 
   const $ = id => document.getElementById(id);
   const yen = n => (n<0?"−":"") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
-  let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "", isSample = true;
+  let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "";
   const pinned = new Set();   // 絞り込み中でも表示し続ける行（index）
 
   function parseCSV(text){
@@ -371,7 +375,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     return cy(input,1) + cy(input,2);
   }
 
-  async function load(text, sample){
+  async function load(text){
     const data = parseCSV(text);
     if(data.length < 2) return showError("明細行が見つかりません。PayPayカードの利用明細CSVか確認してください。");
     const h = data[0].map(s=>s.trim());
@@ -400,14 +404,13 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     });
     const due = parsed.find(r=>r.due)?.due || "不明";
     curDue = due;
-    isSample = !!sample;
     await Promise.all(parsed.map(async r=>{ r.id = await hashId(r.rawId); }));
     rows = parsed; pinned.clear();
-    storeKey = "famsplit:" + (isSample ? "sample" : "m:" + await hashId("due|" + due));
+    storeKey = "famsplit:m:" + await hashId("due|" + due);
     state = {};
     try{ const s = localStorage.getItem(storeKey); if(s) state = JSON.parse(s)||{}; }catch(e){}
     // 旧形式（平文キー）の保存データをハッシュ形式へ移行して削除
-    const legacyKey = "famsplit:" + (isSample ? "sample" : due);
+    const legacyKey = "famsplit:" + due;
     let legacy = null, migrated = false;
     if(legacyKey !== storeKey){ try{ const s = localStorage.getItem(legacyKey); if(s) legacy = JSON.parse(s)||{}; }catch(e){} }
     for(const r of rows){
@@ -418,10 +421,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     for(const k of Object.keys(state)) if(k.includes("|")){ delete state[k]; migrated = true; }
     if(legacy){ try{ localStorage.removeItem(legacyKey); }catch(e){} migrated = true; }
     if(migrated) save();
-    $("stmtInfo").textContent = isSample ? "サンプル明細 ・ 当月支払金額で集計" : `お支払日 ${due} ・ ${parsed.length}件 ・ 当月支払金額で集計`;
-    const n = $("notice");
-    if(isSample){ n.className="notice sample"; n.textContent="表示中はサンプル明細です。「CSVを読み込む」からPayPayカードの利用明細CSVを選ぶと、ご自身の明細に切り替わります。"; n.hidden=false; }
-    else { n.hidden = true; }
+    $("stmtInfo").textContent = `お支払日 ${due} ・ ${parsed.length}件 ・ 当月支払金額で集計`;
+    $("notice").hidden = true;
     render();
   }
   function showError(msg){ const n=$("notice"); n.className="notice sample"; n.textContent=msg; n.hidden=false; }
@@ -488,6 +489,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       $("i"+K+"Carry").textContent = yen(a.carry);
       $("i"+K+"Left").textContent = a.n ? a.left+"回" : "—";
       $("i"+K+"End").textContent = a.end || "—";
+      $("m"+K+"N").textContent = a.n+"件";
+      $("m"+K+"Now").textContent = yen(a.now);
     });
   }
 
@@ -564,7 +567,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     }[sortBy] || ((a,b)=>a-b);
     order.sort(cmp);
     const html = order.map(i=> visible(rows[i], i) ? rowHTML(rows[i],i) : "").join("");
-    $("list").innerHTML = html || `<div class="empty">該当する明細はありません</div>`;
+    $("list").innerHTML = html || `<div class="empty">${rows.length ? "該当する明細はありません" : "「CSVを読み込む」から利用明細CSVを選ぶと、ここに明細が表示されます"}</div>`;
   }
 
   // events
@@ -606,6 +609,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   function setInstOpen(open){
     $("instToggle").setAttribute("aria-expanded", open);
     $("instBody").hidden = !open;
+    $("instMini").hidden = open;
     try{ localStorage.setItem("famsplit:instOpen", open ? "1" : "0"); }catch(e){}
   }
   $("instToggle").addEventListener("click", ()=> setInstOpen($("instToggle").getAttribute("aria-expanded")!=="true"));
@@ -616,7 +620,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     let text;
     try{ text = new TextDecoder("utf-8",{fatal:true}).decode(buf); }
     catch(e){ text = new TextDecoder("shift_jis").decode(buf); }
-    load(text, false);
+    load(text);
   }
   $("pickBtn").addEventListener("click", ()=>$("fileInput").click());
   $("fileInput").addEventListener("change", e=>{ const f=e.target.files[0]; if(f) readFile(f); e.target.value=""; });
@@ -815,7 +819,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 
   try{ const f = localStorage.getItem("famsplit:filter"); if(f){ filter=f; document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x.dataset.f===f)); } }catch(e){}
   try{ const so = localStorage.getItem("famsplit:sort"); if(so && $("sort").querySelector(`option[value="${so}"]`)){ sortBy=so; $("sort").value=so; } }catch(e){}
-  load(SAMPLE, true);
+  try{ localStorage.removeItem("famsplit:sample"); }catch(e){}  // 旧サンプル用の保存データを削除
+  render();
 })();
 </script>
 
