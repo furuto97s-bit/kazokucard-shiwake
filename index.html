@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="家族カード仕訳表">
+<meta name="color-scheme" content="light dark">
+<title>家族カード仕訳表</title>
+<style>
+:root{
+  --ground:#f3f5f7; --surface:#ffffff; --ink:#1c2733; --muted:#66727f; --line:#dfe4ea;
+  --self:#3a6a9c; --self-soft:#e6eef6;
+  --fam:#c9582f; --fam-soft:#fbe9e1;
+  --ok:#2f7d57; --warn:#b3261e;
+  --focus:#3a6a9c;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12171d; --surface:#1a2129; --ink:#e4e9ee; --muted:#95a1ad; --line:#2c3540;
+    --self:#7fb0e0; --self-soft:#1f2e3d; --fam:#f08a60; --fam-soft:#3a2319;
+    --ok:#6cc79a; --warn:#ff8a80; --focus:#7fb0e0;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#12171d; --surface:#1a2129; --ink:#e4e9ee; --muted:#95a1ad; --line:#2c3540;
+  --self:#7fb0e0; --self-soft:#1f2e3d; --fam:#f08a60; --fam-soft:#3a2319;
+  --ok:#6cc79a; --warn:#ff8a80; --focus:#7fb0e0;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;font-size:14px;line-height:1.55;padding-inline:16px;padding-block:20px 60px}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:22px;margin:0;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);font-size:12.5px;margin:2px 0 0}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:500;padding:9px 14px;border-radius:8px;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.btn:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.notice{font-size:12.5px;padding:8px 12px;border-radius:8px;background:var(--self-soft);color:var(--ink)}
+.notice.sample{background:var(--fam-soft)}
+
+/* summary */
+.summary{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.tot .lbl{font-size:12px;color:var(--muted);letter-spacing:.06em}
+.tot .val{font-size:28px;font-weight:600;line-height:1.2}
+.tot.fam .val{color:var(--fam)} .tot.self .val{color:var(--self)}
+.breakdown{margin:8px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.breakdown li{display:flex;justify-content:space-between;gap:8px}
+.check{grid-column:1/-1;border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted);align-items:center}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700}
+.pill.ok{color:var(--ok);border:1px solid currentColor}
+.pill.ng{color:var(--warn);border:1px solid currentColor}
+
+/* filters */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 280px;justify-content:flex-end}
+.sortlbl{font-size:12px;color:var(--muted)}
+.sort{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 8px;font:inherit;font-size:13px}
+.search{flex:1 1 160px;max-width:240px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 10px;font:inherit}
+
+/* rows */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:grid;grid-template-columns:6px 1fr auto;gap:0 12px;padding:10px 14px 10px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.stripe{background:var(--self);border-radius:0 3px 3px 0}
+.row.is-fam .stripe{background:var(--fam)}
+.row.is-part .stripe{background:linear-gradient(var(--self) 50%,var(--fam) 50%)}
+.main{min-width:0}
+.store{font-weight:500;overflow-wrap:anywhere}
+.meta{font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 10px}
+.amt{text-align:right;white-space:nowrap}
+.amt .big{font-size:15px;font-weight:600}
+.amt .split{font-size:11.5px;color:var(--muted)}
+.amt .split b{color:var(--fam);font-weight:600}
+.tag{font-size:11px;font-weight:700;padding:0 6px;border-radius:4px}
+.tag.self{background:var(--self-soft);color:var(--self)}
+.tag.fam{background:var(--fam-soft);color:var(--fam)}
+.ctrl{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;padding:4px 10px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--fam-soft);color:var(--fam);font-weight:700}
+.seg button[data-v="self"][aria-pressed="true"]{background:var(--self-soft);color:var(--self)}
+.part{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.part input,.memo{border:1px solid var(--line);background:var(--ground);color:var(--ink);border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px}
+.part input{width:96px;text-align:right;font-family:"IBM Plex Mono",monospace}
+.memo{flex:1 1 140px;min-width:0}
+.warn{color:var(--warn);font-size:11.5px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);font-size:13px}
+.drop.over{border-color:var(--self);background:var(--self-soft)}
+textarea.out{width:100%;min-height:140px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px;font-family:"IBM Plex Mono",monospace;font-size:12px}
+footer{font-size:12px;color:var(--muted)}
+.instsum{display:flex;flex-direction:column;gap:8px}
+.instsum h2{font-size:14px;margin:0;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.instgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.ib{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.ib .lbl{font-size:12px;font-weight:700}
+.ib.fam .lbl{color:var(--fam)} .ib.self .lbl{color:var(--self)}
+.ib dl{margin:4px 0 0;display:flex;flex-direction:column;gap:1px}
+.ib dl div{display:flex;justify-content:space-between;gap:8px;font-size:12.5px}
+.ib dt{color:var(--muted)} .ib dd{margin:0;font-weight:600}
+.note{font-size:11.5px;color:var(--muted);margin:0}
+dl.inst{grid-column:2/-1;margin:6px 0 0;padding:6px 10px;background:var(--ground);border-radius:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 18px}
+dl.inst div{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+dl.inst .wide{grid-column:1/-1}
+dl.inst dt{color:var(--muted)} dl.inst dd{margin:0;font-weight:600;text-align:right}
+dl.inst small,.ib small{font-weight:400;color:var(--muted);font-size:10.5px}
+@media (max-width:520px){ .tot .val{font-size:24px} .search{max-width:none} }
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>[hidden]{display:none!important}body{margin:0;padding-top:calc(20px + env(safe-area-inset-top,0px))}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>家族カード仕訳表</h1>
+      <p class="sub" id="stmtInfo">PayPayカード利用明細CSV ・ 当月支払金額で集計</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="pickBtn" type="button">CSVを読み込む</button>
+      <input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+      <button class="btn" id="pdfBtn" type="button">PDFで出力</button>
+      <button class="btn" id="copyBtn" type="button">家族分をコピー</button>
+      <button class="btn" id="resetBtn" type="button">仕分けをリセット</button>
+    </div>
+  </header>
+
+  <div id="notice" class="notice sample">表示中はサンプル明細です。「CSVを読み込む」かこの枠にCSVをドロップすると、ご自身の明細に切り替わります。</div>
+
+  <section class="summary" aria-label="集計">
+    <div class="tot fam">
+      <div class="lbl">家族利用分 請求額</div>
+      <div class="val num" id="famTotal">¥0</div>
+      <ul class="breakdown">
+        <li><span>家族カード利用</span><span class="num" id="bFamCard">¥0</span></li>
+        <li><span>本人利用 → 全額振替</span><span class="num" id="bFull">¥0</span></li>
+        <li><span>本人利用 → 一部振替</span><span class="num" id="bPart">¥0</span></li>
+      </ul>
+    </div>
+    <div class="tot self">
+      <div class="lbl">本人利用分</div>
+      <div class="val num" id="selfTotal">¥0</div>
+      <ul class="breakdown">
+        <li><span>本人カード利用</span><span class="num" id="bSelfCard">¥0</span></li>
+        <li><span>家族へ振替</span><span class="num" id="bMoved">−¥0</span></li>
+      </ul>
+    </div>
+    <div class="check">
+      <span>当月支払金額 合計 <b class="num" id="grand">¥0</b></span>
+      <span>本人＋家族 <b class="num" id="sumBoth">¥0</b></span>
+      <span id="checkPill" class="pill ok">一致</span>
+      <span id="countInfo"></span>
+    </div>
+  </section>
+
+  <section class="instsum" aria-label="分割払いの状況">
+    <h2>分割払い</h2>
+    <div class="instgrid">
+      <div class="ib fam">
+        <div class="lbl">家族</div>
+        <dl>
+          <div><dt>件数</dt><dd class="num" id="iFamN">0件</dd></div>
+          <div><dt>分割総額</dt><dd class="num" id="iFamTotal">¥0</dd></div>
+          <div><dt>当月支払</dt><dd class="num" id="iFamNow">¥0</dd></div>
+          <div><dt>残金</dt><dd class="num" id="iFamCarry">¥0</dd></div>
+          <div><dt>残回数<small>（今月含む）</small></dt><dd class="num" id="iFamLeft">—</dd></div>
+          <div><dt>最終支払月</dt><dd class="num" id="iFamEnd">—</dd></div>
+        </dl>
+      </div>
+      <div class="ib self">
+        <div class="lbl">本人</div>
+        <dl>
+          <div><dt>件数</dt><dd class="num" id="iSelfN">0件</dd></div>
+          <div><dt>分割総額</dt><dd class="num" id="iSelfTotal">¥0</dd></div>
+          <div><dt>当月支払</dt><dd class="num" id="iSelfNow">¥0</dd></div>
+          <div><dt>残金</dt><dd class="num" id="iSelfCarry">¥0</dd></div>
+          <div><dt>残回数<small>（今月含む）</small></dt><dd class="num" id="iSelfLeft">—</dd></div>
+          <div><dt>最終支払月</dt><dd class="num" id="iSelfEnd">—</dd></div>
+        </dl>
+      </div>
+    </div>
+    <p class="note">仕訳後の負担で集計します。一部振替した分割は、当月の振替比率で総額・残金を按分しています。複数件ある場合、残回数と最終支払月はいちばん遅く終わる分割の値です。</p>
+  </section>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="絞り込み">
+      <button class="chip" data-f="all" aria-pressed="true" type="button">すべて</button>
+      <button class="chip" data-f="fam" aria-pressed="false" type="button">家族請求の対象</button>
+      <button class="chip" data-f="self" aria-pressed="false" type="button">本人のみ</button>
+      <button class="chip" data-f="moved" aria-pressed="false" type="button">振替済み</button>
+    </div>
+    <div class="tools">
+      <label class="sortlbl" for="sort">並び替え</label>
+      <select id="sort" class="sort">
+        <option value="date-asc">日付（古い順）</option>
+        <option value="date-desc">日付（新しい順）</option>
+        <option value="amt-desc">当月支払金額（高い順）</option>
+        <option value="amt-asc">当月支払金額（低い順）</option>
+      </select>
+      <input class="search" id="search" type="search" placeholder="店名で検索">
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="drop" id="drop">ここにCSVファイルをドロップ（UTF-8 / Shift_JIS どちらでも可）</div>
+
+  <div id="outWrap" hidden>
+    <p class="sub">コピーできなかった場合は、下の内容を選択してコピーしてください。</p>
+    <textarea class="out" id="out" readonly></textarea>
+  </div>
+
+  <footer>仕分け内容はこのブラウザにだけ保存され、同じ支払日のCSVを読み込むと復元されます。明細データは外部に送信されません。</footer>
+</div>
+
+<script>
+(function(){
+  const SAMPLE = `"利用日/キャンセル日","利用店名・商品名","利用者","決済方法","支払区分","利用金額","手数料","支払総額","当月支払金額","翌月以降繰越金額","調整額","当月お支払日"
+"2026/1/10","（サンプル）家電ショップ","本人","Apple Pay","均等 1／3","30000","900","30900","10300","20600","0","2099/1/1"
+"2026/1/12","（サンプル）スーパー","家族*","Apple Pay タッチ決済","1回","4820","0","4820","4820","0","0","2099/1/1"
+"2026/1/13","（サンプル）ガソリンスタンド","本人*","PayPayカード ゴールド","1回","5200","0","5200","5200","0","0","2099/1/1"
+"2026/1/14","（サンプル）ドラッグストア","家族*","Apple Pay タッチ決済","1回","1380","0","1380","1380","0","0","2099/1/1"
+"2026/1/15","（サンプル）レストラン","本人*","PayPayクレジット","1回","8400","0","8400","8400","0","0","2099/1/1"
+"2026/1/16","（サンプル）コンビニ","本人*","Apple Pay","1回","620","0","620","620","0","0","2099/1/1"
+"2026/1/18","（サンプル）電気料金","家族*","PayPayカード ゴールド","1回","9800","0","9800","9800","0","0","2099/1/1"`;
+
+  const $ = id => document.getElementById(id);
+  const yen = n => (n<0?"−":"") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+  let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "", isSample = true;
+
+  function parseCSV(text){
+    text = text.replace(/^﻿/, "");
+    const out=[]; let row=[], cur="", q=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i];
+      if(q){
+        if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+        else cur+=c;
+      } else if(c==='"') q=true;
+      else if(c===','){ row.push(cur); cur=""; }
+      else if(c==='\n'||c==='\r'){
+        if(c==='\r'&&text[i+1]==='\n') i++;
+        row.push(cur); cur="";
+        if(row.some(v=>v!=="")) out.push(row);
+        row=[];
+      } else cur+=c;
+    }
+    row.push(cur); if(row.some(v=>v!=="")) out.push(row);
+    return out;
+  }
+  // 「均等 3／5」→ {n:3, of:5, left:3}（今月分を含む残回数）
+  function parseInst(kind){
+    const m = String(kind||"").replace(/[０-９]/g, d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)).match(/(\d+)\s*[／\/]\s*(\d+)/);
+    if(!m) return null;
+    const n=+m[1], of=+m[2];
+    return {n, of, left: Math.max(of-n+1,0)};
+  }
+  // 支払日 "2026/9/28" と今月含む残回数から最終支払月 "2026/11"
+  function endMonth(due, left){
+    const m = String(due||"").match(/(\d{4})\D+(\d{1,2})/);
+    if(!m || !left) return "—";
+    const d = new Date(+m[1], +m[2]-1 + (left-1), 1);
+    return d.getFullYear() + "/" + String(d.getMonth()+1).padStart(2,"0");
+  }
+  const endKey = s => s==="—" ? "" : s;
+  const toNum = v => { const n = Number(String(v||"").replace(/[,¥\s円]/g,"")); return isFinite(n)?n:0; };
+
+  function load(text, sample){
+    const data = parseCSV(text);
+    if(data.length < 2) return showError("明細行が見つかりません。PayPayカードの利用明細CSVか確認してください。");
+    const h = data[0].map(s=>s.trim());
+    const idx = name => h.indexOf(name);
+    const need = ["利用店名・商品名","利用者","当月支払金額"];
+    const miss = need.filter(n=>idx(n)<0);
+    if(miss.length) return showError("列「"+miss.join("」「")+"」が見つかりません。PayPayカードの利用明細CSVか確認してください。");
+    const iDate=idx("利用日/キャンセル日"), iStore=idx("利用店名・商品名"), iUser=idx("利用者"), iPay=idx("決済方法"),
+          iKind=idx("支払区分"), iUse=idx("利用金額"), iAmt=idx("当月支払金額"), iDue=idx("当月お支払日"),
+          iFee=idx("手数料"), iTotal=idx("支払総額"), iCarry=idx("翌月以降繰越金額");
+    const seen = {};
+    rows = data.slice(1).filter(r=>r.length>iAmt).map(r=>{
+      const base = [r[iDate],r[iStore],r[iUser],r[iUse],r[iKind],r[iAmt]].join("|");
+      seen[base]=(seen[base]||0)+1;
+      return {
+        id: base+"#"+seen[base],
+        date: r[iDate]||"", store: r[iStore]||"", userRaw: (r[iUser]||"").trim(),
+        fam: (r[iUser]||"").trim().startsWith("家族"),
+        pay: iPay>=0?r[iPay]:"", kind: iKind>=0?r[iKind]:"", use: iUse>=0?toNum(r[iUse]):null,
+        amt: toNum(r[iAmt]), due: iDue>=0?r[iDue]:"",
+        fee: iFee>=0?toNum(r[iFee]):0, total: iTotal>=0?toNum(r[iTotal]):null, carry: iCarry>=0?toNum(r[iCarry]):0,
+        inst: parseInst(iKind>=0?r[iKind]:"")
+      };
+    });
+    const due = rows.find(r=>r.due)?.due || "不明";
+    curDue = due;
+    isSample = !!sample;
+    storeKey = "famsplit:" + (isSample ? "sample" : due);
+    state = {};
+    try{ const s = localStorage.getItem(storeKey); if(s) state = JSON.parse(s)||{}; }catch(e){}
+    $("stmtInfo").textContent = isSample ? "サンプル明細 ・ 当月支払金額で集計" : `お支払日 ${due} ・ ${rows.length}件 ・ 当月支払金額で集計`;
+    const n = $("notice");
+    if(isSample){ n.className="notice sample"; n.textContent="表示中はサンプル明細です。「CSVを読み込む」かこの枠にCSVをドロップすると、ご自身の明細に切り替わります。"; n.hidden=false; }
+    else { n.hidden = true; }
+    render();
+  }
+  function showError(msg){ const n=$("notice"); n.className="notice sample"; n.textContent=msg; n.hidden=false; }
+
+  function save(){ try{ localStorage.setItem(storeKey, JSON.stringify(state)); }catch(e){} }
+
+  function clamp(v,amt){ return amt>=0 ? Math.min(Math.max(v,0),amt) : Math.max(Math.min(v,0),amt); }
+  // share of this row that belongs to family (0..1)
+  function shareRatio(r){
+    if(r.fam) return 1;
+    const m = modeOf(r);
+    if(m==="full") return 1;
+    if(m==="part" && r.amt) return clamp(toNum(state[r.id].part), r.amt) / r.amt;
+    return 0;
+  }
+  function modeOf(r){ return r.fam ? "fam" : (state[r.id]?.mode || "self"); }
+
+  function totals(){
+    let grand=0, famCard=0, selfCard=0, full=0, part=0, nFull=0, nPart=0;
+    for(const r of rows){
+      grand += r.amt;
+      if(r.fam){ famCard += r.amt; continue; }
+      selfCard += r.amt;
+      const m = modeOf(r);
+      if(m==="full"){ full += r.amt; nFull++; }
+      else if(m==="part"){ part += clamp(toNum(state[r.id].part), r.amt); nPart++; }
+    }
+    const fam = famCard+full+part, self = selfCard-full-part;
+    return {grand,famCard,selfCard,full,part,fam,self,nFull,nPart};
+  }
+
+  function renderSummary(){
+    const t = totals();
+    $("famTotal").textContent = yen(t.fam);
+    $("selfTotal").textContent = yen(t.self);
+    $("bFamCard").textContent = yen(t.famCard);
+    $("bFull").textContent = yen(t.full) + (t.nFull?`（${t.nFull}件）`:"");
+    $("bPart").textContent = yen(t.part) + (t.nPart?`（${t.nPart}件）`:"");
+    $("bSelfCard").textContent = yen(t.selfCard);
+    $("bMoved").textContent = "−" + yen(t.full+t.part).replace("−","");
+    $("grand").textContent = yen(t.grand);
+    $("sumBoth").textContent = yen(t.fam+t.self);
+    const ok = Math.round(t.fam+t.self) === Math.round(t.grand);
+    const p = $("checkPill"); p.className = "pill " + (ok?"ok":"ng"); p.textContent = ok ? "✓ 一致" : "不一致";
+    const nf = rows.filter(r=>r.fam).length;
+    $("countInfo").textContent = `家族カード ${nf}件 / 本人カード ${rows.length-nf}件`;
+    const acc = {fam:{n:0,total:0,now:0,carry:0,left:0,end:""}, self:{n:0,total:0,now:0,carry:0,left:0,end:""}};
+    for(const r of rows){
+      if(!r.inst) continue;
+      const k = shareRatio(r);
+      const tot = r.total!=null ? r.total : (r.use||0)+r.fee;
+      [["fam",k],["self",1-k]].forEach(([who,w])=>{
+        if(w<=0) return;
+        const a=acc[who]; a.n++; a.total+=tot*w; a.now+=r.amt*w; a.carry+=r.carry*w; a.left=Math.max(a.left,r.inst.left); const e=endKey(endMonth(r.due,r.inst.left)); if(e>a.end) a.end=e;
+      });
+    }
+    [["fam","Fam"],["self","Self"]].forEach(([k,K])=>{
+      const a=acc[k];
+      $("i"+K+"N").textContent = a.n+"件";
+      $("i"+K+"Total").textContent = yen(a.total);
+      $("i"+K+"Now").textContent = yen(a.now);
+      $("i"+K+"Carry").textContent = yen(a.carry);
+      $("i"+K+"Left").textContent = a.n ? a.left+"回" : "—";
+      $("i"+K+"End").textContent = a.end || "—";
+    });
+  }
+
+  function visible(r){
+    const m = modeOf(r);
+    if(query && !r.store.toLowerCase().includes(query)) return false;
+    if(filter==="fam") return m!=="self";
+    if(filter==="self") return m==="self" || m==="part";
+    if(filter==="moved") return m==="full" || m==="part";
+    return true;
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+  function rowHTML(r, i){
+    const m = modeOf(r);
+    const cls = m==="fam"||m==="full" ? "is-fam" : m==="part" ? "is-part" : "";
+    const s = state[r.id] || {};
+    const tag = r.fam ? `<span class="tag fam">家族カード</span>` : `<span class="tag self">本人カード</span>`;
+    const inst = r.kind && r.kind!=="1回" ? ` ・ ${esc(r.kind)}` : "";
+    let instBox = "";
+    if(r.inst){
+      const ratio = shareRatio(r);
+      const who = ratio>=1 ? "家族" : ratio<=0 ? "本人" : `家族${Math.round(ratio*100)}%`;
+      instBox = `<dl class="inst">
+        <div><dt>分割総額<small>（手数料込）</small></dt><dd class="num">${r.total!=null?yen(r.total):"—"}</dd></div>
+        <div><dt>利用額 / 手数料</dt><dd class="num">${r.use!=null?yen(r.use):"—"} / ${yen(r.fee)}</dd></div>
+        <div><dt>残金<small>（翌月以降）</small></dt><dd class="num">${yen(r.carry)}</dd></div>
+        <div><dt>残回数<small>（今月含む）</small></dt><dd class="num">${r.inst.left}回<small>（${r.inst.n}回目／全${r.inst.of}回）</small></dd></div>
+        <div><dt>最終支払月</dt><dd class="num">${endMonth(r.due, r.inst.left)}</dd></div>
+        ${ratio>0 && ratio<1 ? `<div class="wide"><dt>家族負担の残金目安</dt><dd class="num">${yen(r.carry*ratio)}<small>（当月の振替比率 ${who} で按分）</small></dd></div>` : ""}
+      </dl>`;
+    }
+    let split = "";
+    if(m==="part"){ const f = clamp(toNum(s.part), r.amt); split = `<div class="split">家族 <b>${yen(f)}</b> / 本人 ${yen(r.amt-f)}</div>`; }
+    else if(m==="full") split = `<div class="split"><b>家族へ全額</b></div>`;
+    let ctrl = "";
+    if(!r.fam){
+      ctrl = `<div class="ctrl">
+        <span class="seg" role="group" aria-label="仕分け">
+          <button type="button" data-i="${i}" data-v="self" aria-pressed="${m==="self"}">本人</button>
+          <button type="button" data-i="${i}" data-v="full" aria-pressed="${m==="full"}">家族へ全額</button>
+          <button type="button" data-i="${i}" data-v="part" aria-pressed="${m==="part"}">一部を家族へ</button>
+        </span>
+        ${m==="part" ? `<label class="part">家族分 ¥<input id="part-${i}" data-i="${i}" data-k="part" inputmode="numeric" value="${esc(s.part??"")}" aria-label="家族へ振り替える金額"></label>` : ""}
+        ${m!=="self" ? `<input class="memo" id="memo-${i}" data-i="${i}" data-k="memo" placeholder="メモ（例：半分は家族の買い物）" value="${esc(s.memo??"")}">` : ""}
+        ${m==="part" && toNum(s.part)!==clamp(toNum(s.part), r.amt) ? `<span class="warn">当月支払金額を超えています</span>` : ""}
+      </div>`;
+    }
+    return `<div class="row ${cls}">
+      <div class="stripe"></div>
+      <div class="main">
+        <div class="store">${esc(r.store)}</div>
+        <div class="meta"><span class="num">${esc(r.date)}</span>${tag}<span>${esc(r.pay)}${inst}</span></div>
+      </div>
+      <div class="amt"><div class="big num">${yen(r.amt)}</div>${split}</div>
+      ${instBox}
+      ${ctrl}
+    </div>`;
+  }
+
+  function render(){
+    renderSummary();
+    const dateKey = d => { const m = String(d).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? (+m[1])*10000+(+m[2])*100+(+m[3]) : 0; };
+    const order = rows.map((r,i)=>i);
+    const cmp = {
+      "date-asc":  (a,b)=> dateKey(rows[a].date)-dateKey(rows[b].date) || a-b,
+      "date-desc": (a,b)=> dateKey(rows[b].date)-dateKey(rows[a].date) || a-b,
+      "amt-desc":  (a,b)=> rows[b].amt-rows[a].amt || dateKey(rows[a].date)-dateKey(rows[b].date) || a-b,
+      "amt-asc":   (a,b)=> rows[a].amt-rows[b].amt || dateKey(rows[a].date)-dateKey(rows[b].date) || a-b
+    }[sortBy] || ((a,b)=>a-b);
+    order.sort(cmp);
+    const html = order.map(i=> visible(rows[i]) ? rowHTML(rows[i],i) : "").join("");
+    $("list").innerHTML = html || `<div class="empty">該当する明細はありません</div>`;
+  }
+
+  // events
+  $("list").addEventListener("click", e=>{
+    const b = e.target.closest("button[data-v]"); if(!b) return;
+    const r = rows[+b.dataset.i]; const v = b.dataset.v;
+    if(v==="self"){ delete state[r.id]; }
+    else { state[r.id] = Object.assign({}, state[r.id], {mode:v}); if(v==="part" && state[r.id].part==null) state[r.id].part = Math.floor(r.amt/2); }
+    save(); render();
+    if(v==="part"){ const inp = $("part-"+b.dataset.i); if(inp){ inp.focus(); inp.select(); } }
+  });
+  $("list").addEventListener("input", e=>{
+    const el = e.target; if(!el.dataset.k) return;
+    const r = rows[+el.dataset.i];
+    state[r.id] = Object.assign({}, state[r.id], {[el.dataset.k]: el.value});
+    save();
+    if(el.dataset.k==="part"){
+      renderSummary();
+      const row = el.closest(".row"); const f = clamp(toNum(el.value), r.amt);
+      const sp = row.querySelector(".split"); if(sp) sp.innerHTML = `家族 <b>${yen(f)}</b> / 本人 ${yen(r.amt-f)}`;
+      let w = row.querySelector(".warn");
+      if(toNum(el.value)!==f){ if(!w){ w=document.createElement("span"); w.className="warn"; w.textContent="当月支払金額を超えています"; row.querySelector(".ctrl").appendChild(w);} }
+      else if(w) w.remove();
+    }
+  });
+
+  $("list").addEventListener("change", e=>{ if(e.target.dataset.k==="part") render(); });
+  document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+    filter = c.dataset.f;
+    document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x===c));
+    try{ localStorage.setItem("famsplit:filter", filter); }catch(e){}
+    render();
+  }));
+  $("sort").addEventListener("change", e=>{ sortBy = e.target.value; try{ localStorage.setItem("famsplit:sort", sortBy); }catch(err){} render(); });
+  $("search").addEventListener("input", e=>{ query = e.target.value.trim().toLowerCase(); render(); });
+
+  async function readFile(file){
+    const buf = await file.arrayBuffer();
+    let text;
+    try{ text = new TextDecoder("utf-8",{fatal:true}).decode(buf); }
+    catch(e){ text = new TextDecoder("shift_jis").decode(buf); }
+    load(text, false);
+  }
+  $("pickBtn").addEventListener("click", ()=>$("fileInput").click());
+  $("fileInput").addEventListener("change", e=>{ const f=e.target.files[0]; if(f) readFile(f); e.target.value=""; });
+  const drop = $("drop");
+  ["dragenter","dragover"].forEach(t=>document.addEventListener(t,e=>{e.preventDefault(); drop.classList.add("over");}));
+  ["dragleave","drop"].forEach(t=>document.addEventListener(t,e=>{e.preventDefault(); if(t==="drop"||e.target===drop) drop.classList.remove("over");}));
+  document.addEventListener("drop", e=>{ const f=e.dataTransfer?.files?.[0]; if(f) readFile(f); });
+  drop.addEventListener("click", ()=>$("fileInput").click());
+
+  $("resetBtn").addEventListener("click", ()=>{
+    if(!Object.keys(state).length) return;
+    if(!confirm("この明細の振替設定（全額・一部・メモ）をすべて本人利用に戻します。よろしいですか？")) return;
+    state = {}; save(); render();
+  });
+
+  // ===== 家族利用分の出力（PDF） =====
+  const dateKeyX = d => { const m = String(d).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? (+m[1])*10000+(+m[2])*100+(+m[3]) : 0; };
+  function familyRows(){
+    const out = [];
+    rows.forEach((r,i)=>{
+      const m = modeOf(r); if(m==="self") return;
+      const f = r.fam ? r.amt : m==="full" ? r.amt : clamp(toNum(state[r.id].part), r.amt);
+      out.push({
+        i, date:r.date, store:r.store,
+        label: r.fam ? "家族カード" : m==="full" ? "本人→家族（全額）" : "本人→家族（一部）",
+        kind:r.kind, amt:r.amt, fam:f,
+        total: r.inst ? (r.total ?? "") : "", carry: r.inst ? r.carry : "",
+        left: r.inst ? r.inst.left : "", end: r.inst ? endMonth(r.due, r.inst.left) : "",
+        memo: state[r.id]?.memo || ""
+      });
+    });
+    return out.sort((a,b)=> dateKeyX(a.date)-dateKeyX(b.date) || a.i-b.i);
+  }
+  const fileStamp = () => {
+    const m = String(curDue||"").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` : new Date().toISOString().slice(0,10);
+  };
+
+  async function saveFile(filename, blob){
+    // claude.ai 上では downloads 機能、単体ファイルではブラウザの通常ダウンロード
+    if(window.claude && typeof window.claude.use === "function"){
+      let dl = null;
+      try{ dl = await window.claude.use("downloads"); }catch(e){}
+      if(dl){
+        try{ await dl.save({filename, data: blob}); return "saved"; }
+        catch(e){ if(e && e.code==="declined") return "declined"; return "error:" + ((e && e.message) || e); }
+      }
+    }
+    // iPhone / iPad などタッチ端末は共有シート（「ファイルに保存」など）を使う
+    try{
+      const file = new File([blob], filename, {type: blob.type});
+      const touch = window.matchMedia && matchMedia("(pointer:coarse)").matches;
+      if(touch && navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: filename});
+        return "saved";
+      }
+    }catch(e){ if(e && e.name==="AbortError") return "declined"; }
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 60000);
+      return "saved";
+    }catch(e){ return "error:" + e.message; }
+  }
+  function flash(btn, msg, base){ btn.textContent = msg; setTimeout(()=>btn.textContent = base, 2200); }
+
+  // --- PDF（Canvasで帳票を描画 → JPEG画像を埋め込んだPDFを生成） ---
+  async function buildPdf(){
+    const t = totals(), list = familyRows();
+    const PW = 842, PH = 595, M = 28, SC = 2.5;           // A4横（pt）と描画倍率
+    const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
+    const cols = [
+      {h:"利用日", w:54}, {h:"利用店名・商品名", w:182}, {h:"区分", w:100}, {h:"支払区分", w:54},
+      {h:"当月支払", w:58, n:1}, {h:"家族請求額", w:62, n:1, b:1}, {h:"分割総額", w:58, n:1},
+      {h:"残金", w:54, n:1}, {h:"残回数", w:38, n:1}, {h:"最終月", w:46}, {h:"メモ", w:80}
+    ];
+    const cells = d => [d.date, d.store, d.label, d.kind, yen(d.amt), yen(d.fam),
+      d.total===""?"":yen(d.total), d.carry===""?"":yen(d.carry), d.left===""?"":d.left+"回", d.end, d.memo];
+    const RH = 16, HEAD_H = 18;
+    const today = new Date(); const ts = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
+
+    // ページ割り
+    const firstTop = M + 108, otherTop = M + 24, bottom = PH - M - 16;
+    const pages = []; let i = 0, first = true;
+    do {
+      const top = (first ? firstTop : otherTop) + HEAD_H;
+      const cap = Math.max(1, Math.floor((bottom - top) / RH));
+      pages.push(list.slice(i, i + cap)); i += cap; first = false;
+    } while (i < list.length);
+    // 合計行の置き場所
+    const lastCap = Math.floor((bottom - ((pages.length===1?firstTop:otherTop) + HEAD_H)) / RH);
+    if (pages[pages.length-1].length >= lastCap) pages.push([]);
+
+    const fit = (ctx, s, w) => {
+      s = String(s ?? ""); if (ctx.measureText(s).width <= w) return s;
+      while (s.length && ctx.measureText(s + "…").width > w) s = s.slice(0, -1);
+      return s + "…";
+    };
+
+    const jpegs = [];
+    for (let p = 0; p < pages.length; p++) {
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(PW * SC); cv.height = Math.round(PH * SC);
+      const c = cv.getContext("2d");
+      c.scale(SC, SC);
+      c.fillStyle = "#fff"; c.fillRect(0, 0, PW, PH);
+      c.textBaseline = "middle";
+      let y = M;
+      if (p === 0) {
+        c.fillStyle = "#111"; c.font = `700 16px ${FONT}`;
+        c.fillText("家族カード仕訳表　家族利用分 明細", M, y + 9);
+        c.fillStyle = "#555"; c.font = `9px ${FONT}`;
+        c.fillText(`お支払日 ${curDue || "—"}　／　作成日 ${ts}　／　${list.length}件`, M, y + 28);
+        y += 44;
+        const sum = [["家族利用分 合計", yen(t.fam), 1], ["家族カード利用", yen(t.famCard)], ["本人利用→全額振替", yen(t.full)], ["本人利用→一部振替", yen(t.part)]];
+        sum.forEach(([k, v, strong], n) => {
+          const yy = y + n * 14 + (n ? 4 : 0);
+          c.font = `${strong ? 700 : 400} ${strong ? 11.5 : 9}px ${FONT}`;
+          c.fillStyle = strong ? "#b3471f" : "#333";
+          c.textAlign = "left"; c.fillText(k, M, yy);
+          c.textAlign = "right"; c.fillText(v, M + 190, yy);
+        });
+        c.textAlign = "left";
+        y = firstTop;
+      } else {
+        c.fillStyle = "#555"; c.font = `9px ${FONT}`;
+        c.fillText(`家族カード仕訳表　家族利用分 明細（お支払日 ${curDue || "—"}）`, M, y + 8);
+        y = otherTop;
+      }
+      // 見出し
+      c.fillStyle = "#fbe9e1"; c.fillRect(M, y, PW - 2*M, HEAD_H);
+      c.fillStyle = "#c9582f"; c.fillRect(M, y + HEAD_H - 1, PW - 2*M, 1);
+      c.fillStyle = "#222"; c.font = `700 8.5px ${FONT}`;
+      let x = M;
+      cols.forEach(col => {
+        c.textAlign = col.n ? "right" : "left";
+        c.fillText(col.h, col.n ? x + col.w - 4 : x + 4, y + HEAD_H/2);
+        x += col.w;
+      });
+      y += HEAD_H;
+      // 明細
+      pages[p].forEach(d => {
+        const vals = cells(d); x = M;
+        cols.forEach((col, k) => {
+          c.font = `${col.b ? 700 : 400} 8.5px ${FONT}`;
+          c.fillStyle = "#111";
+          c.textAlign = col.n ? "right" : "left";
+          const s = fit(c, vals[k], col.w - 8);
+          c.fillText(s, col.n ? x + col.w - 4 : x + 4, y + RH/2);
+          x += col.w;
+        });
+        c.fillStyle = "#d8d8d8"; c.fillRect(M, y + RH - 0.5, PW - 2*M, 0.5);
+        y += RH;
+      });
+      // 合計（最終ページ）
+      if (p === pages.length - 1) {
+        c.fillStyle = "#111"; c.fillRect(M, y, PW - 2*M, 1);
+        c.font = `700 9px ${FONT}`; c.textAlign = "left";
+        c.fillText(`合計（${list.length}件）`, M + 4, y + RH/2 + 1);
+        const xE = M + cols.slice(0,5).reduce((s,q)=>s+q.w,0), xF = xE + cols[5].w;
+        c.textAlign = "right";
+        c.fillText(yen(list.reduce((s,d)=>s+d.amt,0)), xE - 4, y + RH/2 + 1);
+        c.fillStyle = "#b3471f";
+        c.fillText(yen(list.reduce((s,d)=>s+d.fam,0)), xF - 4, y + RH/2 + 1);
+      }
+      // ページ番号
+      c.fillStyle = "#777"; c.font = `8px ${FONT}`; c.textAlign = "right";
+      c.fillText(`${p+1} / ${pages.length}`, PW - M, PH - M + 6);
+      const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.9));
+      jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: cv.width, h: cv.height });
+    }
+
+    // PDF組み立て
+    const enc = new TextEncoder(), chunks = [], offsets = []; let len = 0;
+    const put = u => { const b = typeof u === "string" ? enc.encode(u) : u; chunks.push(b); len += b.length; };
+    const obj = (id, body) => { offsets[id] = len; put(`${id} 0 obj\n`); body(); put(`\nendobj\n`); };
+    put("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    const n = jpegs.length, pageIds = jpegs.map((_, k) => 3 + k*3);
+    obj(1, () => put(`<< /Type /Catalog /Pages 2 0 R >>`));
+    obj(2, () => put(`<< /Type /Pages /Kids [${pageIds.map(id => id + " 0 R").join(" ")}] /Count ${n} >>`));
+    jpegs.forEach((j, k) => {
+      const pid = 3 + k*3, cid = pid + 1, iid = pid + 2;
+      obj(pid, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im${k} ${iid} 0 R >> >> /Contents ${cid} 0 R >>`));
+      const cs = `q ${PW} 0 0 ${PH} 0 0 cm /Im${k} Do Q`;
+      obj(cid, () => put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+      obj(iid, () => { put(`<< /Type /XObject /Subtype /Image /Width ${j.w} /Height ${j.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${j.bytes.length} >>\nstream\n`); put(j.bytes); put(`\nendstream`); });
+    });
+    const total = 3 + n*3, xref = len;
+    let x = `xref\n0 ${total}\n0000000000 65535 f \n`;
+    for (let id = 1; id < total; id++) x += String(offsets[id]).padStart(10, "0") + " 00000 n \n";
+    put(x + `trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(chunks, { type: "application/pdf" });
+  }
+
+  $("pdfBtn").addEventListener("click", async ()=>{
+    const b = $("pdfBtn");
+    if(!familyRows().length) return flash(b, "家族利用分がありません", "PDFで出力");
+    b.textContent = "作成中…"; b.disabled = true;
+    try{
+      const blob = await buildPdf();
+      const res = await saveFile(`kazoku-card_${fileStamp()}.pdf`, blob);
+      b.disabled = false;
+      if(res==="saved") flash(b, "出力しました", "PDFで出力");
+      else { b.textContent = "PDFで出力"; if(res.startsWith("error")) showError("PDFファイルを保存できませんでした（" + res.slice(6) + "）。"); }
+    }catch(e){
+      b.disabled = false; b.textContent = "PDFで出力";
+      showError("PDFを作成できませんでした（" + e.message + "）。");
+    }
+  });
+
+  $("copyBtn").addEventListener("click", async ()=>{
+    const t = totals();
+    const lines = ["利用日\t利用店名\t区分\t支払区分\t当月支払金額\t家族請求額\t分割総額\t残金\t残回数\t最終支払月\tメモ"];
+    for(const r of rows){
+      const m = modeOf(r); if(m==="self") continue;
+      const f = r.fam ? r.amt : m==="full" ? r.amt : clamp(toNum(state[r.id].part), r.amt);
+      const label = r.fam ? "家族カード" : m==="full" ? "本人→家族(全額)" : "本人→家族(一部)";
+      const iv = r.inst ? [r.total??"", r.carry, r.inst.left, endMonth(r.due,r.inst.left)] : ["","","",""];
+      lines.push([r.date, r.store, label, r.kind, r.amt, f, ...iv, state[r.id]?.memo||""].join("\t"));
+    }
+    lines.push(["","家族利用分 合計","","","","" + t.fam,"","","","",""].join("\t"));
+    const txt = lines.join("\n");
+    const b = $("copyBtn");
+    try{ await navigator.clipboard.writeText(txt); b.textContent="コピーしました"; setTimeout(()=>b.textContent="家族分をコピー",1800); $("outWrap").hidden=true; }
+    catch(e){ $("out").value = txt; $("outWrap").hidden = false; $("out").focus(); $("out").select(); }
+  });
+
+  try{ const f = localStorage.getItem("famsplit:filter"); if(f){ filter=f; document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x.dataset.f===f)); } }catch(e){}
+  try{ const so = localStorage.getItem("famsplit:sort"); if(so && $("sort").querySelector(`option[value="${so}"]`)){ sortBy=so; $("sort").value=so; } }catch(e){}
+  load(SAMPLE, true);
+})();
+</script>
+
+</body>
+</html>
