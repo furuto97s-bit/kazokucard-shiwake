@@ -76,6 +76,13 @@ h1{font-size:24px;font-weight:800;margin:0;letter-spacing:.02em;line-height:1.3}
 .sec-h{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--ink2);margin:0}
 .sec-h::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--ink)}
 .sec-h::after{content:"";flex:1;height:1px;background:var(--line)}
+.toggle{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 12px 0 0;border:0;background:none;font:inherit;color:inherit;letter-spacing:inherit;cursor:pointer}
+.toggle .chev{width:12px;height:8px;transition:transform .2s}
+.toggle[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+.toggle-lbl{font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--muted);padding:2px 8px;border:1px solid var(--line2);border-radius:999px}
+.toggle[aria-expanded="true"] .toggle-lbl::after{content:"閉じる"}
+.toggle[aria-expanded="false"] .toggle-lbl::after{content:"表示する"}
+.instbody{display:flex;flex-direction:column;gap:12px}
 
 /* installments */
 .instsum{display:flex;flex-direction:column;gap:12px}
@@ -216,7 +223,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   </section>
 
   <section class="instsum" aria-label="分割払いの状況">
-    <h2 class="sec-h">分割払い</h2>
+    <h2 class="sec-h"><button type="button" class="toggle" id="instToggle" aria-expanded="true" aria-controls="instBody">分割払い<svg class="chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="toggle-lbl"></span></button></h2>
+    <div class="instbody" id="instBody">
     <div class="instgrid">
       <div class="ib fam">
         <div class="lbl">家族</div>
@@ -242,6 +250,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       </div>
     </div>
     <p class="note">仕訳後の負担で集計します。一部振替した分割は、当月の振替比率で総額・残金を按分しています。複数件ある場合、残回数と最終支払月はいちばん遅く終わる分割の値です。</p>
+    </div>
   </section>
 
   <section class="instsum" aria-label="明細">
@@ -291,6 +300,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   const $ = id => document.getElementById(id);
   const yen = n => (n<0?"−":"") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
   let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "", isSample = true;
+  const pinned = new Set();   // 絞り込み中でも表示し続ける行（index）
 
   function parseCSV(text){
     text = text.replace(/^﻿/, "");
@@ -327,6 +337,11 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     return d.getFullYear() + "/" + String(d.getMonth()+1).padStart(2,"0");
   }
   const endKey = s => s==="—" ? "" : s;
+  // "2026/9/8" → "2026/09/08"（解釈できない値はそのまま）
+  function fmtYMD(s){
+    const m = String(s||"").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? `${m[1]}/${m[2].padStart(2,"0")}/${m[3].padStart(2,"0")}` : String(s||"");
+  }
   const toNum = v => { const n = Number(String(v||"").replace(/[,¥\s円]/g,"")); return isFinite(n)?n:0; };
 
   // 保存キー用ハッシュ：店名・金額・日付をそのまま localStorage に残さない
@@ -387,7 +402,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     curDue = due;
     isSample = !!sample;
     await Promise.all(parsed.map(async r=>{ r.id = await hashId(r.rawId); }));
-    rows = parsed;
+    rows = parsed; pinned.clear();
     storeKey = "famsplit:" + (isSample ? "sample" : "m:" + await hashId("due|" + due));
     state = {};
     try{ const s = localStorage.getItem(storeKey); if(s) state = JSON.parse(s)||{}; }catch(e){}
@@ -476,9 +491,11 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     });
   }
 
-  function visible(r){
+  function visible(r, i){
     const m = modeOf(r);
     if(query && !r.store.toLowerCase().includes(query)) return false;
+    // 仕分けを操作した行は、絞り込みを切り替えるまでその場に残す（誤操作に気付けるように）
+    if(pinned.has(i)) return true;
     if(filter==="fam") return m!=="self";
     if(filter==="self") return m==="self" || m==="part";
     if(filter==="moved") return m==="full" || m==="part";
@@ -546,7 +563,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       "amt-asc":   (a,b)=> rows[a].amt-rows[b].amt || dateKey(rows[a].date)-dateKey(rows[b].date) || a-b
     }[sortBy] || ((a,b)=>a-b);
     order.sort(cmp);
-    const html = order.map(i=> visible(rows[i]) ? rowHTML(rows[i],i) : "").join("");
+    const html = order.map(i=> visible(rows[i], i) ? rowHTML(rows[i],i) : "").join("");
     $("list").innerHTML = html || `<div class="empty">該当する明細はありません</div>`;
   }
 
@@ -554,6 +571,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   $("list").addEventListener("click", e=>{
     const b = e.target.closest("button[data-v]"); if(!b) return;
     const r = rows[+b.dataset.i]; const v = b.dataset.v;
+    pinned.add(+b.dataset.i);
     if(v==="self"){ delete state[r.id]; }
     else { state[r.id] = Object.assign({}, state[r.id], {mode:v}); if(v==="part" && state[r.id].part==null) state[r.id].part = Math.floor(r.amt/2); }
     save(); render();
@@ -576,13 +594,22 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 
   $("list").addEventListener("change", e=>{ if(e.target.dataset.k==="part") render(); });
   document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
-    filter = c.dataset.f;
+    filter = c.dataset.f; pinned.clear();
     document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x===c));
     try{ localStorage.setItem("famsplit:filter", filter); }catch(e){}
     render();
   }));
   $("sort").addEventListener("change", e=>{ sortBy = e.target.value; try{ localStorage.setItem("famsplit:sort", sortBy); }catch(err){} render(); });
-  $("search").addEventListener("input", e=>{ query = e.target.value.trim().toLowerCase(); render(); });
+  $("search").addEventListener("input", e=>{ query = e.target.value.trim().toLowerCase(); pinned.clear(); render(); });
+
+  // 分割払いの表示／非表示（開閉状態はこのブラウザに記憶）
+  function setInstOpen(open){
+    $("instToggle").setAttribute("aria-expanded", open);
+    $("instBody").hidden = !open;
+    try{ localStorage.setItem("famsplit:instOpen", open ? "1" : "0"); }catch(e){}
+  }
+  $("instToggle").addEventListener("click", ()=> setInstOpen($("instToggle").getAttribute("aria-expanded")!=="true"));
+  try{ if(localStorage.getItem("famsplit:instOpen")==="0") setInstOpen(false); }catch(e){}
 
   async function readFile(file){
     const buf = await file.arrayBuffer();
@@ -646,15 +673,16 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     const t = totals(), list = familyRows();
     const PW = 842, PH = 595, M = 28, SC = 2.5;           // A4横（pt）と描画倍率
     const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
+    // 列幅の合計は PW-2M（786pt）。日付は YYYY/MM/DD、最終月は YYYY/MM が収まる幅
     const cols = [
-      {h:"利用日", w:54}, {h:"利用店名・商品名", w:182}, {h:"区分", w:100}, {h:"支払区分", w:54},
+      {h:"利用日", w:64}, {h:"利用店名・商品名", w:166}, {h:"区分", w:100}, {h:"支払区分", w:54},
       {h:"当月支払", w:58, n:1}, {h:"家族請求額", w:62, n:1, b:1}, {h:"分割総額", w:58, n:1},
-      {h:"残金", w:54, n:1}, {h:"残回数", w:38, n:1}, {h:"最終月", w:46}, {h:"メモ", w:80}
+      {h:"残金", w:54, n:1}, {h:"残回数", w:38, n:1}, {h:"最終月", w:52}, {h:"メモ", w:80}
     ];
-    const cells = d => [d.date, d.store, d.label, d.kind, yen(d.amt), yen(d.fam),
+    const cells = d => [fmtYMD(d.date), d.store, d.label, d.kind, yen(d.amt), yen(d.fam),
       d.total===""?"":yen(d.total), d.carry===""?"":yen(d.carry), d.left===""?"":d.left+"回", d.end, d.memo];
     const RH = 16, HEAD_H = 18;
-    const today = new Date(); const ts = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
+    const today = new Date(); const ts = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
 
     // ページ割り
     const firstTop = M + 108, otherTop = M + 24, bottom = PH - M - 16;
