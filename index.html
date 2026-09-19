@@ -437,9 +437,13 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       const method = String(r[iMethod]||""), m = method.match(CARD_RE);
       if(!m) continue;                                   // PayPayポイント・残高のみの取引は対象外
       const out = toNum(r[iOut]), inc = toNum(r[iIn]);
-      // ポイント併用時は「クレジット … (452円)」のカード決済分だけ。入金（返金など）はマイナス
+      // ポイント併用時は「クレジット … (452円)」のカード決済分だけ
       let amt = m[3] ? toNum(m[3]) : (out || 0);
-      if(!out && inc) amt = -(m[3] ? toNum(m[3]) : inc);
+      if(!out && inc){
+        // カードへの返金・キャンセルはマイナス金額の明細として集計。それ以外の入金（獲得など）は対象外
+        if(!/返金|キャンセル|取消|取り消し/.test(String(r[iWhat]||""))) continue;
+        amt = -(m[3] ? toNum(m[3]) : inc);
+      }
       if(!amt) continue;
       const point = (method.match(/PayPayポイント\s*[（(]\s*([\d,]+)\s*円/)||[])[1];
       const date = String(r[iDate]||"").split(/\s+/)[0];
