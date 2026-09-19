@@ -166,6 +166,21 @@ dl.inst small,.ib small{font-weight:400;color:var(--muted);font-size:10.5px}
 footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);text-align:center;line-height:1.8}
 .copyright{margin:12px 0 0;font-size:11px;color:var(--ink2);letter-spacing:.04em}
 
+/* PDF出力：本人／家族の選択ポップアップ */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(16,18,23,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet{width:100%;max-width:420px;background:var(--card);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px rgba(16,18,23,.25)}
+.sheet h2{margin:0;font-size:17px;font-weight:800}
+.sheet-sub{margin:0 0 4px;font-size:12.5px;color:var(--muted)}
+.pick{-webkit-appearance:none;appearance:none;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:14px 16px;border-radius:14px;border:1px solid transparent;cursor:pointer;text-align:left}
+.pick.fam{background:var(--fam-soft);border-color:var(--fam-edge);color:var(--fam-ink)}
+.pick.self{background:var(--self-soft);border-color:var(--self-edge);color:var(--self-ink)}
+.pick:active{transform:translateY(1px)}
+.pick:disabled{opacity:.45;cursor:default}
+.pick-lbl{font-size:15px;font-weight:800}
+.pick-file{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sheet-cancel{width:100%;margin-top:4px}
+@media (min-width:641px){ .modal{align-items:center} }
+
 @media (max-width:640px){
   .wrap{gap:20px}
   h1{font-size:22px}
@@ -299,6 +314,16 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   </footer>
 </div>
 
+
+<div class="modal" id="pdfDialog" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pdfDlgTitle">
+    <h2 id="pdfDlgTitle">PDFで出力</h2>
+    <p class="sheet-sub">出力する明細を選んでください。</p>
+    <button type="button" class="pick fam" id="pdfFamBtn"><span class="pick-lbl">家族利用分</span><span class="pick-file" id="pdfFamName"></span></button>
+    <button type="button" class="pick self" id="pdfSelfBtn"><span class="pick-lbl">本人利用分</span><span class="pick-file" id="pdfSelfName"></span></button>
+    <button type="button" class="btn sheet-cancel" id="pdfCancel">キャンセル</button>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -705,17 +730,20 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     state = {}; save(); render();
   });
 
-  // ===== 家族利用分の出力（PDF） =====
+  // ===== 本人／家族 利用分の出力（PDF） =====
   const dateKeyX = d => { const m = String(d).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? (+m[1])*10000+(+m[2])*100+(+m[3]) : 0; };
-  function familyRows(){
+  // who: "fam"（家族利用分）/ "self"（本人利用分）。share はその人の負担額
+  function splitRows(who){
     const out = [];
     rows.forEach((r,i)=>{
-      const m = modeOf(r); if(m==="self") return;
-      const f = r.fam ? r.amt : m==="full" ? r.amt : clamp(toNum(state[r.id].part), r.amt);
+      const m = modeOf(r);
+      if(who==="fam" ? m==="self" : (m==="fam" || m==="full")) return;
+      const f = m==="self" ? 0 : (m==="fam" || m==="full") ? r.amt : clamp(toNum(state[r.id].part), r.amt);
       out.push({
         i, date:r.date, store:r.store,
-        label: r.fam ? "家族カード" : m==="full" ? "本人→家族（全額）" : "本人→家族（一部）",
-        kind:r.kind, amt:r.amt, fam:f,
+        label: who==="fam" ? (r.fam ? "家族カード" : m==="full" ? "本人→家族（全額）" : "本人→家族（一部）")
+                           : (m==="part" ? "本人（一部家族へ）" : "本人カード"),
+        kind:r.kind, amt:r.amt, share: who==="fam" ? f : r.amt - f,
         total: r.inst ? (r.total ?? "") : "", carry: r.inst ? r.carry : "",
         left: r.inst ? r.inst.left : "", end: r.inst ? endMonth(r.due, r.inst.left) : "",
         memo: state[r.id]?.memo || ""
@@ -723,10 +751,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     });
     return out.sort((a,b)=> dateKeyX(a.date)-dateKeyX(b.date) || a.i-b.i);
   }
-  const fileStamp = () => {
-    const m = String(curDue||"").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-    return m ? `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` : new Date().toISOString().slice(0,10);
-  };
+  // ファイル名：kazoku-card202609.pdf / honnin-card202609.pdf（出力した年月）
+  const pdfName = who => { const d = new Date(); return `${who==="fam" ? "kazoku" : "honnin"}-card${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}.pdf`; };
 
   async function saveFile(filename, blob){
     // iPhone（Safari）は共有シートから「ファイルに保存」などを選ぶ
@@ -747,17 +773,22 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
   function flash(btn, msg, base){ btn.textContent = msg; setTimeout(()=>btn.textContent = base, 2200); }
 
   // --- PDF（Canvasで帳票を描画 → JPEG画像を埋め込んだPDFを生成） ---
-  async function buildPdf(){
-    const t = totals(), list = familyRows();
+  async function buildPdf(who){
+    const t = totals(), list = splitRows(who);
+    const C = who==="fam"
+      ? {title:"家族利用分 明細", col:"家族請求額", accent:"#b3471f", headBg:"#fbe9e1", headLine:"#c9582f",
+         sum:[["家族利用分 合計", t.fam, 1], ["家族カード利用", t.famCard], ["本人利用→全額振替", t.full], ["本人利用→一部振替", t.part]]}
+      : {title:"本人利用分 明細", col:"本人負担額", accent:"#2a3a98", headBg:"#e9eefc", headLine:"#3f56d1",
+         sum:[["本人利用分 合計", t.self, 1], ["本人カード利用", t.selfCard], ["家族へ全額振替", -t.full], ["家族へ一部振替", -t.part]]};
     const PW = 842, PH = 595, M = 28, SC = 2.5;           // A4横（pt）と描画倍率
     const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
     // 列幅の合計は PW-2M（786pt）。日付は YYYY/MM/DD、最終月は YYYY/MM が収まる幅
     const cols = [
       {h:"利用日", w:64}, {h:"利用店名・商品名", w:166}, {h:"区分", w:100}, {h:"支払区分", w:54},
-      {h:"当月支払", w:58, n:1}, {h:"家族請求額", w:62, n:1, b:1}, {h:"分割総額", w:58, n:1},
+      {h:"当月支払", w:58, n:1}, {h:C.col, w:62, n:1, b:1}, {h:"分割総額", w:58, n:1},
       {h:"残金", w:54, n:1}, {h:"残回数", w:38, n:1}, {h:"最終月", w:52}, {h:"メモ", w:80}
     ];
-    const cells = d => [fmtYMD(d.date), d.store, d.label, d.kind, yen(d.amt), yen(d.fam),
+    const cells = d => [fmtYMD(d.date), d.store, d.label, d.kind, yen(d.amt), yen(d.share),
       d.total===""?"":yen(d.total), d.carry===""?"":yen(d.carry), d.left===""?"":d.left+"回", d.end, d.memo];
     const RH = 16, HEAD_H = 18;
     const today = new Date(); const ts = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
@@ -791,28 +822,27 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       let y = M;
       if (p === 0) {
         c.fillStyle = "#111"; c.font = `700 16px ${FONT}`;
-        c.fillText("家族カード仕訳表　家族利用分 明細", M, y + 9);
+        c.fillText(`家族カード仕訳表　${C.title}`, M, y + 9);
         c.fillStyle = "#555"; c.font = `9px ${FONT}`;
         c.fillText(`${curLabel || "—"}　／　作成日 ${ts}　／　${list.length}件`, M, y + 28);
         y += 44;
-        const sum = [["家族利用分 合計", yen(t.fam), 1], ["家族カード利用", yen(t.famCard)], ["本人利用→全額振替", yen(t.full)], ["本人利用→一部振替", yen(t.part)]];
-        sum.forEach(([k, v, strong], n) => {
+        C.sum.forEach(([k, v, strong], n) => {
           const yy = y + n * 14 + (n ? 4 : 0);
           c.font = `${strong ? 700 : 400} ${strong ? 11.5 : 9}px ${FONT}`;
-          c.fillStyle = strong ? "#b3471f" : "#333";
+          c.fillStyle = strong ? C.accent : "#333";
           c.textAlign = "left"; c.fillText(k, M, yy);
-          c.textAlign = "right"; c.fillText(v, M + 190, yy);
+          c.textAlign = "right"; c.fillText(yen(v), M + 190, yy);
         });
         c.textAlign = "left";
         y = firstTop;
       } else {
         c.fillStyle = "#555"; c.font = `9px ${FONT}`;
-        c.fillText(`家族カード仕訳表　家族利用分 明細（${curLabel || "—"}）`, M, y + 8);
+        c.fillText(`家族カード仕訳表　${C.title}（${curLabel || "—"}）`, M, y + 8);
         y = otherTop;
       }
       // 見出し
-      c.fillStyle = "#fbe9e1"; c.fillRect(M, y, PW - 2*M, HEAD_H);
-      c.fillStyle = "#c9582f"; c.fillRect(M, y + HEAD_H - 1, PW - 2*M, 1);
+      c.fillStyle = C.headBg; c.fillRect(M, y, PW - 2*M, HEAD_H);
+      c.fillStyle = C.headLine; c.fillRect(M, y + HEAD_H - 1, PW - 2*M, 1);
       c.fillStyle = "#222"; c.font = `700 8.5px ${FONT}`;
       let x = M;
       cols.forEach(col => {
@@ -843,8 +873,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
         const xE = M + cols.slice(0,5).reduce((s,q)=>s+q.w,0), xF = xE + cols[5].w;
         c.textAlign = "right";
         c.fillText(yen(list.reduce((s,d)=>s+d.amt,0)), xE - 4, y + RH/2 + 1);
-        c.fillStyle = "#b3471f";
-        c.fillText(yen(list.reduce((s,d)=>s+d.fam,0)), xF - 4, y + RH/2 + 1);
+        c.fillStyle = C.accent;
+        c.fillText(yen(list.reduce((s,d)=>s+d.share,0)), xF - 4, y + RH/2 + 1);
       }
       // ページ番号
       c.fillStyle = "#777"; c.font = `8px ${FONT}`; c.textAlign = "right";
@@ -875,13 +905,30 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     return new Blob(chunks, { type: "application/pdf" });
   }
 
-  $("pdfBtn").addEventListener("click", async ()=>{
+  // 「PDFで出力」→ ポップアップで本人／家族を選択
+  const dlg = $("pdfDialog");
+  function openPdfDialog(){
+    $("pdfFamName").textContent = pdfName("fam");
+    $("pdfSelfName").textContent = pdfName("self");
+    $("pdfFamBtn").disabled = !splitRows("fam").length;
+    $("pdfSelfBtn").disabled = !splitRows("self").length;
+    dlg.hidden = false;
+    $("pdfCancel").focus();
+  }
+  const closePdfDialog = () => { dlg.hidden = true; $("pdfBtn").focus(); };
+  $("pdfCancel").addEventListener("click", closePdfDialog);
+  dlg.addEventListener("click", e=>{ if(e.target===dlg) closePdfDialog(); });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !dlg.hidden) closePdfDialog(); });
+  $("pdfFamBtn").addEventListener("click", ()=>{ dlg.hidden = true; exportPdf("fam"); });
+  $("pdfSelfBtn").addEventListener("click", ()=>{ dlg.hidden = true; exportPdf("self"); });
+  $("pdfBtn").addEventListener("click", openPdfDialog);
+
+  async function exportPdf(who){
     const b = $("pdfBtn");
-    if(!familyRows().length) return flash(b, "家族利用分がありません", "PDFで出力");
     b.textContent = "作成中…"; b.disabled = true;
     try{
-      const blob = await buildPdf();
-      const res = await saveFile(`kazoku-card_${fileStamp()}.pdf`, blob);
+      const blob = await buildPdf(who);
+      const res = await saveFile(pdfName(who), blob);
       b.disabled = false;
       if(res==="saved") flash(b, "出力しました", "PDFで出力");
       else { b.textContent = "PDFで出力"; if(res.startsWith("error")) showError("PDFファイルを保存できませんでした（" + res.slice(6) + "）。"); }
@@ -889,7 +936,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       b.disabled = false; b.textContent = "PDFで出力";
       showError("PDFを作成できませんでした（" + e.message + "）。");
     }
-  });
+  }
 
   try{ const f = localStorage.getItem("famsplit:filter"); if(f){ filter=f; document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", x.dataset.f===f)); } }catch(e){}
   try{ const so = localStorage.getItem("famsplit:sort"); if(so && $("sort").querySelector(`option[value="${so}"]`)){ sortBy=so; $("sort").value=so; } }catch(e){}
