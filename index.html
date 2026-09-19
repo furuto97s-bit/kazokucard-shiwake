@@ -195,7 +195,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     <div>
       <p class="eyebrow">PayPay Card · Family Split</p>
       <h1>家族カード仕訳表</h1>
-      <p class="sub" id="stmtInfo">PayPayカード利用明細CSV ・ 当月支払金額で集計</p>
+      <p class="sub" id="stmtInfo">PayPayカード利用明細CSV / PayPay取引履歴CSV</p>
     </div>
     <div class="actions">
       <button class="btn primary" id="pickBtn" type="button"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V2.5M4.5 6 8 2.5 11.5 6M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>CSVを読み込む</button>
@@ -205,7 +205,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     </div>
   </header>
 
-  <div id="notice" class="notice sample"><div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSVを「CSVを読み込む」から選択してご利用ください。</span></div></div>
+  <div id="notice" class="notice sample"><div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSV、またはPayPayアプリの取引履歴CSVを「CSVを読み込む」から選択してご利用ください。</span></div></div>
 
   <section class="summary" aria-label="集計">
     <div class="tot fam">
@@ -226,7 +226,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       </ul>
     </div>
     <div class="check">
-      <span>当月支払金額 合計<b class="num" id="grand">¥0</b></span>
+      <span><span id="grandLbl">当月支払金額 合計</span><b class="num" id="grand">¥0</b></span>
       <span>本人＋家族<b class="num" id="sumBoth">¥0</b></span>
       <span id="checkPill" class="pill ok">一致</span>
       <span id="countInfo"></span>
@@ -303,7 +303,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 <script>
 (function(){
 
-  const SAMPLE_HTML = `<div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSVを「CSVを読み込む」から選択してご利用ください。</span></div>`;
+  const SAMPLE_HTML = `<div class="notice-body"><strong>サンプル明細を表示しています</strong><span>PayPayカードの利用明細CSV、またはPayPayアプリの取引履歴CSVを「CSVを読み込む」から選択してご利用ください。</span></div>`;
   const $ = id => document.getElementById(id);
   const yen = n => (n<0?"−":"") + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
   const SAMPLE = `"利用日/キャンセル日","利用店名・商品名","利用者","決済方法","支払区分","利用金額","手数料","支払総額","当月支払金額","翌月以降繰越金額","調整額","当月お支払日"
@@ -315,7 +315,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
 "2026/1/16","（サンプル）コンビニ","本人*","Apple Pay","1回","620","0","620","620","0","0","2099/1/1"
 "2026/1/17","（サンプル）通販サイト（分割変更）","本人","PayPayカード ゴールド","分割変更","12000","0","12000","4000","8000","0","2099/1/1"
 "2026/1/18","（サンプル）電気料金","家族*","PayPayカード ゴールド","1回","9800","0","9800","9800","0","0","2099/1/1"`;
-  let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "", isSample = true;
+  let curDue = "", rows = [], state = {}, storeKey = null, filter = "all", sortBy = "date-asc", query = "", isSample = true, curLabel = "";
   const pinned = new Set();   // 絞り込み中でも表示し続ける行（index）
 
   function parseCSV(text){
@@ -387,14 +387,12 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     return cy(input,1) + cy(input,2);
   }
 
-  async function load(text, sample){
-    const data = parseCSV(text);
-    if(data.length < 2) return showError("明細行が見つかりません。PayPayカードの利用明細CSVか確認してください。");
-    const h = data[0].map(s=>s.trim());
+  // PayPayカード「利用明細」CSV
+  function parseStatement(data, h){
     const idx = name => h.indexOf(name);
     const need = ["利用店名・商品名","利用者","当月支払金額"];
     const miss = need.filter(n=>idx(n)<0);
-    if(miss.length) return showError("列「"+miss.join("」「")+"」が見つかりません。PayPayカードの利用明細CSVか確認してください。");
+    if(miss.length) return {error: "列「"+miss.join("」「")+"」が見つかりません。PayPayカードの利用明細CSVか、PayPayアプリの取引履歴CSVか確認してください。"};
     const iDate=idx("利用日/キャンセル日"), iStore=idx("利用店名・商品名"), iUser=idx("利用者"), iPay=idx("決済方法"),
           iKind=idx("支払区分"), iUse=idx("利用金額"), iAmt=idx("当月支払金額"), iDue=idx("当月お支払日"),
           iFee=idx("手数料"), iTotal=idx("支払総額"), iCarry=idx("翌月以降繰越金額");
@@ -415,17 +413,73 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
       };
     });
     const due = parsed.find(r=>r.due)?.due || "不明";
-    curDue = due;
+    return {parsed, due, label: `お支払日 ${due}`, storeSeed: "due|" + due, legacyKey: "famsplit:" + due,
+            info: `お支払日 ${due} ・ ${parsed.length}件 ・ 当月支払金額で集計`, grandLbl: "当月支払金額 合計"};
+  }
+
+  // PayPayアプリ「取引履歴」CSV：カード（Visa/Mastercard/JCB 下4桁）で決済した分だけを取り込む
+  const CARD_RE = /(Visa|VISA|Mastercard|JCB)\s*(\d{4})(?:\s*[（(]\s*([\d,]+)\s*円\s*[)）])?/;
+  function parseAppHistory(data, h){
+    const idx = name => h.indexOf(name);
+    const iDate=idx("取引日"), iOut=idx("出金金額（円）"), iIn=idx("入金金額（円）"), iWhat=idx("取引内容"),
+          iStore=idx("取引先"), iMethod=idx("取引方法"), iKind=idx("支払い区分"), iUser=idx("利用者"), iNo=idx("取引番号");
+    const body = data.slice(1).filter(r=>r.length>iMethod);
+    // カード下4桁 → 本人/家族：同じCSVの「利用者」列から判定し、このブラウザに記憶（コードには番号を持たない）
+    let cards = {};
+    try{ cards = JSON.parse(localStorage.getItem("famsplit:cards")||"{}")||{}; }catch(e){}
+    for(const r of body){
+      const m = String(r[iMethod]||"").match(CARD_RE), u = String(r[iUser]||"").trim();
+      if(m && (u==="本人" || u==="家族")) cards[m[2]] = u==="家族" ? "fam" : "self";
+    }
+    try{ localStorage.setItem("famsplit:cards", JSON.stringify(cards)); }catch(e){}
+    const seen = {}, parsed = [];
+    for(const r of body){
+      const method = String(r[iMethod]||""), m = method.match(CARD_RE);
+      if(!m) continue;                                   // PayPayポイント・残高のみの取引は対象外
+      const out = toNum(r[iOut]), inc = toNum(r[iIn]);
+      // ポイント併用時は「クレジット … (452円)」のカード決済分だけ。入金（返金など）はマイナス
+      let amt = m[3] ? toNum(m[3]) : (out || 0);
+      if(!out && inc) amt = -(m[3] ? toNum(m[3]) : inc);
+      if(!amt) continue;
+      const point = (method.match(/PayPayポイント\s*[（(]\s*([\d,]+)\s*円/)||[])[1];
+      const date = String(r[iDate]||"").split(/\s+/)[0];
+      const base = iNo>=0 && r[iNo] && r[iNo]!=="-" ? "no|" + r[iNo] : [r[iDate],r[iStore],method,amt].join("|");
+      seen[base]=(seen[base]||0)+1;
+      const kind = String(r[iKind]||"").replace(/^[ー−-]回払い$/,"1回").replace(/^-$/,"") || "1回";
+      parsed.push({
+        rawId: base+"#"+seen[base],
+        date, store: r[iStore]||"", userRaw: String(r[iUser]||"").trim(),
+        fam: cards[m[2]]==="fam",
+        locked: /分割変更/.test(String(r[iStore]||"") + kind),
+        pay: `${m[1]} ${m[2]}` + (point ? ` ・ ポイント${point}円併用` : "") + (r[iWhat] && r[iWhat]!=="支払い" ? ` ・ ${r[iWhat]}` : ""),
+        kind, use: amt, amt, due: "", fee: 0, total: null, carry: 0, inst: parseInst(kind)
+      });
+    }
+    if(!parsed.length) return {error: "カードで決済した取引が見つかりません。PayPayアプリの取引履歴CSVか確認してください。"};
+    const keys = parsed.map(r=>fmtYMD(r.date)).sort(), from = keys[0], to = keys[keys.length-1];
+    return {parsed, due: to, label: `対象期間 ${from}〜${to}`, storeSeed: "paypay-app", legacyKey: null,
+            info: `PayPay取引履歴 ${from}〜${to} ・ カード決済 ${parsed.length}件`, grandLbl: "カード決済額 合計"};
+  }
+
+  async function load(text, sample){
+    const data = parseCSV(text);
+    if(data.length < 2) return showError("明細行が見つかりません。PayPayカードの利用明細CSVか、PayPayアプリの取引履歴CSVか確認してください。");
+    const h = data[0].map(s=>s.trim());
+    const res = h.includes("取引方法") && h.includes("出金金額（円）") ? parseAppHistory(data, h) : parseStatement(data, h);
+    if(res.error) return showError(res.error);
+    const {parsed} = res;
+    curDue = res.due; curLabel = res.label;
     await Promise.all(parsed.map(async r=>{ r.id = await hashId(r.rawId); }));
     rows = parsed; pinned.clear();
     isSample = !!sample;
-    storeKey = "famsplit:" + (isSample ? "sample" : "m:" + await hashId("due|" + due));
+    // 取引履歴は取引番号で行を識別するので、期間が重なるCSVを読んでも仕分けが引き継がれる
+    storeKey = "famsplit:" + (isSample ? "sample" : "m:" + await hashId(res.storeSeed));
     state = {};
     try{ const s = localStorage.getItem(storeKey); if(s) state = JSON.parse(s)||{}; }catch(e){}
     // 旧形式（平文キー）の保存データをハッシュ形式へ移行して削除
-    const legacyKey = "famsplit:" + (isSample ? "sample" : due);
+    const legacyKey = isSample ? "famsplit:sample" : res.legacyKey;
     let legacy = null, migrated = false;
-    if(legacyKey !== storeKey){ try{ const s = localStorage.getItem(legacyKey); if(s) legacy = JSON.parse(s)||{}; }catch(e){} }
+    if(legacyKey && legacyKey !== storeKey){ try{ const s = localStorage.getItem(legacyKey); if(s) legacy = JSON.parse(s)||{}; }catch(e){} }
     for(const r of rows){
       for(const src of [legacy, state]){
         if(src && src[r.rawId]){ if(!state[r.id]) state[r.id] = src[r.rawId]; if(src===state) delete state[r.rawId]; migrated = true; }
@@ -434,7 +488,8 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
     for(const k of Object.keys(state)) if(k.includes("|")){ delete state[k]; migrated = true; }
     if(legacy){ try{ localStorage.removeItem(legacyKey); }catch(e){} migrated = true; }
     if(migrated) save();
-    $("stmtInfo").textContent = isSample ? "サンプル明細 ・ 当月支払金額で集計" : `お支払日 ${due} ・ ${parsed.length}件 ・ 当月支払金額で集計`;
+    $("stmtInfo").textContent = isSample ? "サンプル明細 ・ 当月支払金額で集計" : res.info;
+    $("grandLbl").textContent = res.grandLbl;
     const n = $("notice");
     if(isSample){ n.className="notice sample"; n.innerHTML=SAMPLE_HTML; n.hidden=false; }
     else { n.hidden = true; }
@@ -734,7 +789,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
         c.fillStyle = "#111"; c.font = `700 16px ${FONT}`;
         c.fillText("家族カード仕訳表　家族利用分 明細", M, y + 9);
         c.fillStyle = "#555"; c.font = `9px ${FONT}`;
-        c.fillText(`お支払日 ${curDue || "—"}　／　作成日 ${ts}　／　${list.length}件`, M, y + 28);
+        c.fillText(`${curLabel || "—"}　／　作成日 ${ts}　／　${list.length}件`, M, y + 28);
         y += 44;
         const sum = [["家族利用分 合計", yen(t.fam), 1], ["家族カード利用", yen(t.famCard)], ["本人利用→全額振替", yen(t.full)], ["本人利用→一部振替", yen(t.part)]];
         sum.forEach(([k, v, strong], n) => {
@@ -748,7 +803,7 @@ footer{margin-top:8px;padding-top:18px;border-top:1px solid var(--line);font-siz
         y = firstTop;
       } else {
         c.fillStyle = "#555"; c.font = `9px ${FONT}`;
-        c.fillText(`家族カード仕訳表　家族利用分 明細（お支払日 ${curDue || "—"}）`, M, y + 8);
+        c.fillText(`家族カード仕訳表　家族利用分 明細（${curLabel || "—"}）`, M, y + 8);
         y = otherTop;
       }
       // 見出し
